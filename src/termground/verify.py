@@ -144,3 +144,30 @@ def merge_fallback_rules(ir: ClauseIR) -> list[str]:
         r.rule_id = f"R{k}"
     ir.rules = kept
     return w
+
+
+def dedupe(ir: ClauseIR) -> list[str]:
+    """Remove exact repeats: a rule identical to an earlier rule, and a step identical to an earlier step of its chain
+    (small models sometimes loop under constrained decoding)."""
+    w, seen_rules, kept = [], set(), []
+    key_step = lambda s: (s.modality, s.actor, tuple((a.remedy, a.label.strip().lower()) for a in s.actions))  # noqa: E731
+    for r in ir.rules:
+        k = (tuple(c.text.strip().lower() for c in r.trigger.conditions), tuple(key_step(s) for s in r.chain))
+        if k in seen_rules:
+            w.append(f"Removed a repeated copy of rule {r.rule_id[1:]}")
+            continue
+        seen_rules.add(k)
+        steps, seen = [], set()
+        for s in r.chain:
+            if key_step(s) in seen:
+                w.append(f"Rule {r.rule_id[1:]}: removed a repeated remedy step")
+                continue
+            seen.add(key_step(s))
+            s.step = len(steps) + 1
+            steps.append(s)
+        r.chain = steps
+        kept.append(r)
+    for k, r in enumerate(kept, start=1):
+        r.rule_id = f"R{k}"
+    ir.rules = kept
+    return w

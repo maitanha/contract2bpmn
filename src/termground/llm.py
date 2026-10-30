@@ -20,8 +20,9 @@ class LLM:
     def __init__(self, model: str = DEFAULT_MODEL, gpu_memory_utilization: float = 0.35, max_model_len: int = 8192):
         from vllm import LLM as _V
         self.model_name = model
+        # compact JSON: without this, small models can fill the token budget with whitespace inside the grammar
         self.v = _V(model=model, gpu_memory_utilization=gpu_memory_utilization, max_model_len=max_model_len,
-                    seed=13, enforce_eager=False)
+                    seed=13, enforce_eager=False, structured_outputs_config={"backend": "xgrammar", "disable_any_whitespace": True})
 
     def _params(self, cfg: GenConfig, schema: dict | None):
         from vllm import SamplingParams

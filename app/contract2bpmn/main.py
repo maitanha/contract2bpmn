@@ -73,8 +73,12 @@ class Api:
         self.engine.stop()
 
 
-def serve(api: Api, port: int):
-    """Browser test mode: serve the UI and the API over local HTTP (used for automated UI tests)."""
+def serve(api: Api, port: int, password: str | None = None):
+    """Web mode: serve the UI and the API over HTTP on 127.0.0.1 only (reach it through SSH or VS Code port
+    forwarding). With a password, every request needs HTTP basic auth (any user name, this password)."""
+    import base64
+    import hmac
+
     class H(SimpleHTTPRequestHandler):
         def __init__(self, *a, **kw):
             super().__init__(*a, directory=str(UI), **kw)
@@ -82,7 +86,30 @@ def serve(api: Api, port: int):
         def log_message(self, *a):
             pass
 
+        def _authorized(self) -> bool:
+            if not password:
+                return True
+            h = self.headers.get("Authorization", "")
+            if h.startswith("Basic "):
+                try:
+                    _, _, pw = base64.b64decode(h[6:]).decode().partition(":")
+                    if hmac.compare_digest(pw, password):
+                        return True
+                except Exception:  # noqa: BLE001
+                    pass
+            self.send_response(401)
+            self.send_header("WWW-Authenticate", 'Basic realm="Contract2BPMN"')
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return False
+
+        def do_GET(self):
+            if self._authorized():
+                super().do_GET()
+
         def do_POST(self):
+            if not self._authorized():
+                return
             n = int(self.headers.get("Content-Length", 0))
             body = json.loads(self.rfile.read(n) or b"{}")
             name = self.path.rsplit("/", 1)[-1]
@@ -127,13 +154,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--serve", type=int, default=0, help="browser test mode on this port (no window)")
     ap.add_argument("--selftest", action="store_true", help="start the model, convert a sample clause, exit 0 if valid")
+    ap.add_argument("--password-file", default="", help="web mode: file that holds the password (basic auth)")
     a = ap.parse_args()
     api = Api()
     try:
         if a.selftest:
             raise SystemExit(selftest(api))
         if a.serve:
-            serve(api, a.serve)
+            pw = Path(a.password_file).read_text().strip() if a.password_file else None
+            serve(api, a.serve, pw)
         else:
             import webview
             api.window = webview.create_window(APP_NAME, str(UI / "index.html"), js_api=api,

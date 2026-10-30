@@ -246,8 +246,7 @@ class Pipeline:
         for i in range(len(items)):
             cue = ("The cue [FALLBACK] marks the start of the next step in a chain. " if use_s2 else "")
             pn = party_note(parties[i]) if parties[i] else "List the parties first.\n"
-            if use_s2 and hints[i]:
-                pn += "Remedy words in the clause: " + "; ".join(f"{w} -> {t}" for w, t in hints[i]) + "\n"
+            # remedy hints are not put in the prompt: the 0.8B model copied hint words as remedy labels (dev run)
             prompts.append(EXTRACT_PROMPT.format(cue_note=cue, remedy_def=REMEDY_DEF, party_note=pn, text=work[i]))
             pids = [p["id"] for p in parties[i]] if (parties[i] and use_enum) else None
             schema = ir_schema(pids, remedy_enum=use_enum)
@@ -270,9 +269,9 @@ class Pipeline:
     def _finish(r: Result, make, source: str | None = None):
         try:
             r.ir = make()
-            from .verify import check_ir, default_beneficiaries, ground_numbers, merge_fallback_rules
+            from .verify import check_ir, dedupe, default_beneficiaries, ground_numbers, merge_fallback_rules
             # S4 (TermGround systems only): numbers must occur in the clause; fallback "rules" join their chain
-            w = (ground_numbers(r.ir, source) + merge_fallback_rules(r.ir) + default_beneficiaries(r.ir)) \
+            w = (dedupe(r.ir) + ground_numbers(r.ir, source) + merge_fallback_rules(r.ir) + default_beneficiaries(r.ir)) \
                 if source is not None else []
             r.stages["warnings"] = w + check_ir(r.ir)
             r.xml = compile_ir(r.ir)

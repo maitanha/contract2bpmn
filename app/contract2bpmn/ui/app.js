@@ -59,8 +59,12 @@
   $('btn-example').onclick = () => { $('contract').value = EXAMPLE; };
   $('btn-clear').onclick = () => { $('contract').value = ''; };
   $('btn-open').onclick = async () => {
-    if (!desktop()) { alert('Open text is available in the desktop app.'); return; }
-    const r = await call('open_text'); if (r.ok) $('contract').value = r.text;
+    if (desktop()) { const r = await call('open_text'); if (r.ok) $('contract').value = r.text; return; }
+    // web mode: read a local .txt file in the browser (nothing is uploaded until "Draw workflow")
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.txt,text/plain';
+    inp.onchange = () => { const f = inp.files[0]; if (!f) return;
+      const rd = new FileReader(); rd.onload = () => { $('contract').value = rd.result; }; rd.readAsText(f); };
+    inp.click();
   };
   $('btn-convert').onclick = async () => {
     const b = $('btn-convert'); b.disabled = true; b.innerHTML = '<span class="spinner"></span>Reading the contract&hellip;';
