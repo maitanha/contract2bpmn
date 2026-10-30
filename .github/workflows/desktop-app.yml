@@ -1,0 +1,109 @@
+name: Build Contract2BPMN desktop app
+
+# Builds a Windows installer (.exe) and macOS disk images (.dmg, Apple Silicon and Intel).
+# Every build runs a self-test on the runner: the bundled llama.cpp server and model must turn a
+# sample clause into a valid BPMN file. Push a tag like v0.1.0 to attach the files to a GitHub release.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+env:
+  LLAMA_TAG: b11624
+  MODEL_URL: https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_K_M.gguf
+  MODEL_SHA256: bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            llama_asset: llama-b11624-bin-win-cpu-x64.zip
+            llama_sha256: 57f436b5153fc411b4dc13a2d24b45d91968e1163a6c5bf3941d20bb28689e8c
+            artifact: Contract2BPMN-Setup-x64.exe
+          - os: macos-14            # Apple Silicon
+            llama_asset: llama-b11624-bin-macos-arm64.tar.gz
+            llama_sha256: 5bd8555c20e5d6d45831c038f484769245e5bcc1c265c4911c6ae15e4d9a35df
+            artifact: Contract2BPMN-macOS-arm64.dmg
+          - os: macos-15-intel      # Intel Mac
+            llama_asset: llama-b11624-bin-macos-x64.tar.gz
+            llama_sha256: 6e71233cd40f448706392ff356097794efaffa85037eda695dcb6f01e2e55571
+            artifact: Contract2BPMN-macOS-x64.dmg
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Download llama.cpp server (pinned build, checksum)
+        run: |
+          curl -sSfL -o llama_pkg "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_TAG}/${{ matrix.llama_asset }}"
+          echo "${{ matrix.llama_sha256 }}  llama_pkg" | shasum -a 256 -c -
+          mkdir -p llama_x llama
+          if [[ "${{ matrix.llama_asset }}" == *.zip ]]; then unzip -q llama_pkg -d llama_x; else tar -xzf llama_pkg -C llama_x; fi
+          server=$(find llama_x -name 'llama-server*' -type f | head -1)
+          cp -R "$(dirname "$server")"/. llama/
+          ls llama | head -40
+
+      - name: Download model (pinned revision, checksum)
+        run: |
+          mkdir -p models
+          curl -sSfL -o models/Qwen3.5-0.8B-Q4_K_M.gguf "$MODEL_URL"
+          echo "${MODEL_SHA256}  models/Qwen3.5-0.8B-Q4_K_M.gguf" | shasum -a 256 -c -
+
+      - name: Build with PyInstaller
+        run: pyinstaller --noconfirm contract2bpmn.spec
+
+      - name: Self-test (Windows)
+        if: runner.os == 'Windows'
+        run: ./dist/Contract2BPMN/Contract2BPMN.exe --selftest
+
+      - name: Self-test (macOS)
+        if: runner.os == 'macOS'
+        run: ./dist/Contract2BPMN.app/Contents/MacOS/Contract2BPMN --selftest
+
+      - name: Package Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\windows\installer.iss
+
+      - name: Package macOS disk image
+        if: runner.os == 'macOS'
+        run: |
+          codesign --force --deep --sign - dist/Contract2BPMN.app
+          mkdir -p dmg && cp -R dist/Contract2BPMN.app dmg/ && ln -s /Applications dmg/Applications
+          hdiutil create -volname Contract2BPMN -srcfolder dmg -ov -format UDZO "dist/${{ matrix.artifact }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: app/dist/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*

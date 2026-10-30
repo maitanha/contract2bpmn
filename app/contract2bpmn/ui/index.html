@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contract2BPMN</title>
+<link rel="stylesheet" href="vendor/diagram-js.css">
+<link rel="stylesheet" href="vendor/bpmn-js.css">
+<link rel="stylesheet" href="vendor/bpmn-font/css/bpmn-embedded.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand">Contract2BPMN <span class="sub">contract clause &rarr; BPMN workflow</span></div>
+  <div id="status" class="pill wait">Starting the language model&hellip;</div>
+</header>
+<main>
+  <section class="left">
+    <div class="toolbar">
+      <button id="btn-open" title="Open a .txt file">Open text</button>
+      <button id="btn-example">Example</button>
+      <button id="btn-clear">Clear</button>
+    </div>
+    <textarea id="contract" spellcheck="false" placeholder="Paste a contract clause here, for example a penalty or remedy clause of a service agreement."></textarea>
+    <button id="btn-convert" class="primary" disabled>Draw workflow</button>
+    <div id="result" class="result">
+      <h3>What the tool understood</h3>
+      <p class="hint">Parties, remedy chains and warnings appear here after the conversion.</p>
+    </div>
+  </section>
+  <section class="right">
+    <div class="toolbar">
+      <button id="btn-save" disabled>Save .bpmn</button>
+      <button id="btn-fit" disabled>Fit to window</button>
+      <span class="note">You can edit the diagram before saving.</span>
+    </div>
+    <div id="canvas"></div>
+    <div id="empty" class="empty">The BPMN workflow appears here.</div>
+  </section>
+</main>
+<footer>Runs on this computer with Qwen3.5-0.8B (llama.cpp). No text leaves your device. Check the result against the contract before you rely on it.</footer>
+<script src="vendor/bpmn-modeler.production.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

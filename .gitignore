@@ -1,0 +1,9 @@
+__pycache__/
+app/.buildenv/
+app/build/
+app/dist/
+app/llama/
+app/llama_x/
+app/llama_pkg
+app/models/*.gguf
+app/vendor/llama-*/
