@@ -49,9 +49,9 @@ jobs:
       - name: Download llama.cpp server (pinned build, checksum)
         run: |
           curl -sSfL -o llama_pkg "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_TAG}/${{ matrix.llama_asset }}"
-          echo "${{ matrix.llama_sha256 }}  llama_pkg" | shasum -a 256 -c -
+          python -c "import hashlib,sys; h=hashlib.sha256(open('llama_pkg','rb').read()).hexdigest(); print(h); sys.exit(h!='${{ matrix.llama_sha256 }}')"
           mkdir -p llama_x llama
-          if [[ "${{ matrix.llama_asset }}" == *.zip ]]; then unzip -q llama_pkg -d llama_x; else tar -xzf llama_pkg -C llama_x; fi
+          python -c "import zipfile,tarfile,sys; n='${{ matrix.llama_asset }}'; (zipfile.ZipFile('llama_pkg').extractall('llama_x') if n.endswith('.zip') else tarfile.open('llama_pkg').extractall('llama_x'))"
           server=$(find llama_x -name 'llama-server*' -type f | head -1)
           cp -R "$(dirname "$server")"/. llama/
           ls llama | head -40
@@ -60,7 +60,7 @@ jobs:
         run: |
           mkdir -p models
           curl -sSfL -o models/Qwen3.5-0.8B-Q4_K_M.gguf "$MODEL_URL"
-          echo "${MODEL_SHA256}  models/Qwen3.5-0.8B-Q4_K_M.gguf" | shasum -a 256 -c -
+          python -c "import hashlib,os,sys; h=hashlib.sha256(open('models/Qwen3.5-0.8B-Q4_K_M.gguf','rb').read()).hexdigest(); print(h); sys.exit(h!=os.environ['MODEL_SHA256'])"
 
       - name: Build with PyInstaller
         run: pyinstaller --noconfirm contract2bpmn.spec
